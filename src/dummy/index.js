@@ -1,6 +1,21 @@
+const VirtualMachine = require('../virtualmachine');
+
 class DummyVMManager {
 	listHosts() {
-		return Promise.resolve([{name: 'test'}]);
+		let vm = new VirtualMachine();
+		vm.name = 'test';
+		vm.type = 'dummy';
+		vm.powerOn = () => {
+			return new Promise( (resolve, reject)=> {
+				setTimeout(resolve, 1000);
+			});
+		};
+		vm.powerOff = () => {
+			return new Promise( (resolve, reject)=> {
+				setTimeout(resolve, 1000);
+			});
+		};
+		return Promise.resolve([vm]);
 	}
 }
 

@@ -8,11 +8,16 @@ describe('Dummy implementation', function() {
 			done();
 		});
 		it('list vms', function(done) {
+			this.timeout(5000);
 			let wmm = new VMManager('dummy://');
 			wmm.listHosts()
 				.then( (hosts) => {
 					hosts.should.be.an('array');
-					done();
+					hosts[0].name.should.be.an('string');
+					hosts[0].powerOn()
+						.then( () => hosts[0].powerOff() )
+						.then( () => done() );
+					console.log( hosts[0] );
 				});
 		});
 	});
