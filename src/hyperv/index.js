@@ -6,16 +6,18 @@ const STATES = {
 	'2': 'RUNNING',
 };
 
-function getVmInfo(options) {
-	const {hostname} = options;
+function psJsonWrapper(cmd, options) {
+	if (!options) {
+		options = [];
+	}
 	return new Promise((resolve, reject) => {
-		let statusPs = new Shell({
+		let ps = new Shell({
 			executionPolicy: 'Bypass',
 			noProfile: true,
 			debugMsg: false,
 		});
-		statusPs.addCommand('Get-VM -Name ' + hostname + ' | ConvertTo-Json');
-		statusPs
+		ps.addCommand(`${cmd} | ConvertTo-Json`, options);
+		ps
 			.invoke()
 			.then((output) => {
 				resolve(JSON.parse(output));
@@ -27,84 +29,54 @@ function getVmInfo(options) {
 	});
 }
 
+function powerOffVM(options) {
+	const {hostname} = options;
+	return psJsonWrapper('Stop-VM -Name ' + hostname);
+}
+
+function powerOnVM(options) {
+	const {hostname} = options;
+	return psJsonWrapper('Start-VM -Name ' + hostname);
+}
+
+function getVmInfo(options) {
+	const {hostname} = options;
+	return psJsonWrapper('Get-VM -Name ' + hostname);
+}
+
+function getVmList(options) {
+	return psJsonWrapper('Get-WmiObject -Class Msvm_ComputerSystem -Namespace "root\\virtualization\\v2"').then((vmList) =>
+		vmList.filter((e) => e.Caption === 'Virtual Machine'),
+	);
+}
+
 class HyperVMManager {
 	listHosts() {
 		return new Promise((resolve, reject) => {
-			let vmList = [];
-			let ps = new Shell({
-				executionPolicy: 'Bypass',
-				noProfile: true,
-				debugMsg: false,
-			});
-			ps.addCommand('Get-WmiObject -Class Msvm_ComputerSystem -Namespace "root\\virtualization\\v2" | ConvertTo-Json');
-			ps
-				.invoke()
-				.then((output) => {
-					try {
-						let obj = JSON.parse(output);
-						obj.forEach((vmiVM) => {
-							if (vmiVM.Caption === 'Virtual Machine') {
-								console.log(vmiVM);
-								let vm = new VirtualMachine(vmiVM.Id); // TODO: get VMId with "Get-VM"
-								vm.name = vmiVM.ElementName;
-								vm.type = TYPE;
-								vm.host = vmiVM.__SERVER;
-								vm.powerOn = () => {
-									return new Promise((resolve, reject) => {
-										let powerOnPs = new Shell({
-											executionPolicy: 'Bypass',
-											noProfile: true,
-											debugMsg: false,
-										});
-										powerOnPs.addCommand('Start-VM -Name ' + vmiVM.ElementName);
-										powerOnPs
-											.invoke()
-											.then((output) => {
-												resolve();
-											})
-											.catch((err) => {
-												ps.dispose();
-												reject(err);
-											});
-									});
-								};
-								vm.powerOff = () => {
-									return new Promise((resolve, reject) => {
-										let powerOffPs = new Shell({
-											executionPolicy: 'Bypass',
-											noProfile: true,
-											debugMsg: false,
-										});
-										powerOffPs.addCommand('Stop-VM -Name ' + vmiVM.ElementName);
-										powerOffPs
-											.invoke()
-											.then((output) => {
-												resolve();
-											})
-											.catch((err) => {
-												ps.dispose();
-												reject(err);
-											});
-									});
-								};
-								vm.getStatus = () => {
-									return getVmInfo({hostname: vmiVM.ElementName}).then((info) => {
-										return info.State;
-									});
-								};
-								vmList.push(vm);
-							}
+			let promises = []; // TODO
+			getVmList().then((vmBases) => {
+				vmBases.forEach( async (vmiVM) => { 
+					let vmInfo = await getVmInfo({hostname: vmiVM.ElementName});
+					let vm = new VirtualMachine(vmInfo.Id); // TODO: get VMId with "Get-VM"
+					vm.name = vmiVM.ElementName;
+					vm.type = TYPE;
+					vm.host = vmiVM.__SERVER;
+					vm.powerOn = () => {
+						return powerOnVM({hostname: vmiVM.ElementName});
+					};
+					vm.powerOff = () => {
+						return powerOffVM({hostname: vmiVM.ElementName});
+					};
+					vm.getStatus = () => {
+						return getVmInfo({hostname: vmiVM.ElementName}).then((info) => {
+							return info.State;
 						});
-						resolve(vmList);
-						//	console.log(vmList);
-					} catch (err) {
-						throw err;
-					}
-				})
-				.catch((err) => {
-					ps.dispose();
-					reject(err);
+					};
+					vmList.push(vm);
 				});
+			});
+			console.log(vmList)
+			resolve(vmList);
 		});
 	}
 }
