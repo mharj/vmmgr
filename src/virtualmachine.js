@@ -1,5 +1,6 @@
 class VirtualMachine {
-	constructor() {
+	constructor(id) {
+		this.id = id;
 		this.name = null;
 		this.location = null;
 		this.type = null;
